@@ -93,6 +93,13 @@ options:
        - Path to a .deb package on the remote machine.
      required: false
      version_added: "1.6"
+  install_python_apt:
+     description:
+       - Install python-apt if it isn't already installed
+     required: false
+     default: yes
+     choices: [ "yes", "no" ]
+     version_added: "1.7"
 requirements: [ python-apt, aptitude ]
 author: Matthew Williams
 notes:
@@ -439,28 +446,32 @@ def main():
             install_recommends = dict(default='yes', aliases=['install-recommends'], type='bool'),
             force = dict(default='no', type='bool'),
             upgrade = dict(choices=['yes', 'safe', 'full', 'dist']),
-            dpkg_options = dict(default=DPKG_OPTIONS)
+            dpkg_options = dict(default=DPKG_OPTIONS),
+	    install_python_apt = dict(type='bool', default=True, aliases=['install-python-apt'])
         ),
         mutually_exclusive = [['package', 'upgrade', 'deb']],
         required_one_of = [['package', 'upgrade', 'update_cache', 'deb']],
         supports_check_mode = True
     )
 
+    p = module.params
     if not HAS_PYTHON_APT:
-        try:
-            module.run_command('apt-get update && apt-get install python-apt -y -q', use_unsafe_shell=True, check_rc=True)
-            global apt, apt_pkg
-            import apt
-            import apt_pkg
-        except ImportError:
-            module.fail_json(msg="Could not import python modules: apt, apt_pkg. Please install python-apt package.")
+	if p['install_python_apt']:
+		try:
+		    module.run_command('apt-get update && apt-get install python-apt -y -q', use_unsafe_shell=True, check_rc=True)
+		    global apt, apt_pkg
+		    import apt
+		    import apt_pkg
+		except ImportError:
+		    module.fail_json(msg="Could not import python modules: apt, apt_pkg. Please install python-apt package.")
+	else:
+		module.fail_json(msg="python-apt is not installed, and install_python_apt is 'no'.")
 
     global APTITUDE_CMD
     APTITUDE_CMD = module.get_bin_path("aptitude", False)
     global APT_GET_CMD
     APT_GET_CMD = module.get_bin_path("apt-get")
 
-    p = module.params
     if not APTITUDE_CMD and p.get('upgrade', None) in [ 'full', 'safe', 'yes' ]:
         module.fail_json(msg="Could not find aptitude. Please ensure it is installed.")
 
